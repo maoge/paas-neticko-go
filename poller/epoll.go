@@ -6,8 +6,8 @@ package poller
 import (
 	"runtime"
 
-	logger "github.com/maoge/zzstack/paas-neticko-go/log"
-	"github.com/maoge/zzstack/paas-toolkit/sync/atomic"
+	logger "github.com/maoge/paas-neticko-go/log"
+	"github.com/maoge/paas-toolkit-go/sync/atomic"
 	"golang.org/x/sys/unix"
 )
 

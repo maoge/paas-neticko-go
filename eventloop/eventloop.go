@@ -3,10 +3,10 @@ package eventloop
 import (
 	"unsafe"
 
+	"github.com/maoge/paas-neticko-go/log"
+	"github.com/maoge/paas-neticko-go/poller"
 	"github.com/maoge/paas-toolkit-go/sync/atomic"
 	"github.com/maoge/paas-toolkit-go/sync/spinlock"
-	"github.com/paas-neticko-go/log"
-	"github.com/paas-neticko-go/poller"
 )
 
 var (

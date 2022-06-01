@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/RussellLuo/timingwheel"
+	"github.com/maoge/paas-neticko-go/eventloop"
+	"github.com/maoge/paas-neticko-go/log"
+	"github.com/maoge/paas-neticko-go/poller"
 	"github.com/maoge/paas-toolkit-go/ringbuffer"
 	"github.com/maoge/paas-toolkit-go/sync/atomic"
-	"github.com/paas-neticko-go/eventloop"
-	"github.com/paas-neticko-go/log"
-	"github.com/paas-neticko-go/poller"
 	"golang.org/x/sys/unix"
 )
 

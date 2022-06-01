@@ -8,8 +8,8 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/paas-neticko-go/log"
-	"github.com/paas-toolkit/sync/atomic"
+	"github.com/maoge/paas-neticko-go/log"
+	"github.com/maoge/paas-toolkit-go/sync/atomic"
 	"golang.org/x/sys/unix"
 )
 
