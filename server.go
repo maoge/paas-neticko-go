@@ -1,0 +1,128 @@
+package gev
+
+import (
+	"errors"
+	"runtime"
+	"time"
+
+	"github.com/RussellLuo/timingwheel"
+	"github.com/maoge/paas-neticko-go/eventloop"
+	"github.com/maoge/paas-neticko-go/log"
+	"github.com/maoge/paas-toolkit-go/sync"
+	"github.com/maoge/paas-toolkit-go/sync/atomic"
+	"golang.org/x/sys/unix"
+)
+
+// Handler Server 注册接口
+type Handler interface {
+	CallBack
+	OnConnect(c *Connection)
+}
+
+// Server gev Server
+type Server struct {
+	listener  *listener
+	workLoops []*eventloop.EventLoop
+	callback  Handler
+
+	timingWheel *timingwheel.TimingWheel
+	opts        *Options
+	running     atomic.Bool
+}
+
+// NewServer 创建 Server
+func NewServer(handler Handler, opts ...Option) (server *Server, err error) {
+	if handler == nil {
+		return nil, errors.New("handler is nil")
+	}
+	options := newOptions(opts...)
+	server = new(Server)
+	server.callback = handler
+	server.opts = options
+	server.timingWheel = timingwheel.NewTimingWheel(server.opts.tick, server.opts.wheelSize)
+	server.listener, err = newListener(server.opts.Network, server.opts.Address, options.ReusePort, server.handleNewConnection)
+	if err != nil {
+		return nil, err
+	}
+
+	if server.opts.NumLoops <= 0 {
+		server.opts.NumLoops = runtime.NumCPU()
+	}
+
+	wloops := make([]*eventloop.EventLoop, server.opts.NumLoops)
+	for i := 0; i < server.opts.NumLoops; i++ {
+		l, err := eventloop.New()
+		if err != nil {
+			for j := 0; j < i; j++ {
+				_ = wloops[j].Stop()
+			}
+			return nil, err
+		}
+		wloops[i] = l
+	}
+	server.workLoops = wloops
+
+	return
+}
+
+// RunAfter 延时任务
+func (s *Server) RunAfter(d time.Duration, f func()) *timingwheel.Timer {
+	return s.timingWheel.AfterFunc(d, f)
+}
+
+// RunEvery 定时任务
+func (s *Server) RunEvery(d time.Duration, f func()) *timingwheel.Timer {
+	return s.timingWheel.ScheduleFunc(&everyScheduler{Interval: d}, f)
+}
+
+func (s *Server) handleNewConnection(fd int, sa unix.Sockaddr) {
+	loop := s.opts.Strategy(s.workLoops)
+
+	c := NewConnection(fd, loop, sa, s.opts.Protocol, s.timingWheel, s.opts.IdleTime, s.callback)
+
+	loop.QueueInLoop(func() {
+		s.callback.OnConnect(c)
+		if err := loop.AddSocketAndEnableRead(fd, c); err != nil {
+			log.Error("[AddSocketAndEnableRead]", err)
+		}
+	})
+}
+
+// Start 启动 Server
+func (s *Server) Start() {
+	sw := sync.WaitGroupWrapper{}
+	s.timingWheel.Start()
+
+	length := len(s.workLoops)
+	for i := 0; i < length; i++ {
+		sw.AddAndRun(s.workLoops[i].Run)
+	}
+
+	sw.AddAndRun(s.listener.Run)
+	s.running.Set(true)
+	sw.Wait()
+}
+
+// Stop 关闭 Server
+func (s *Server) Stop() {
+	if s.running.Get() {
+		s.running.Set(false)
+
+		s.timingWheel.Stop()
+		if err := s.listener.Stop(); err != nil {
+			log.Error(err)
+		}
+
+		for k := range s.workLoops {
+			if err := s.workLoops[k].Stop(); err != nil {
+				log.Error(err)
+			}
+		}
+	}
+
+}
+
+// Options 返回 options
+func (s *Server) Options() Options {
+	return *s.opts
+}
